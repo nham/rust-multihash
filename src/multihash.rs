@@ -1,5 +1,7 @@
 use self::HashFnType::*;
 
+pub type MultiHash<'a> = &'a [u8];
+
 enum HashFnType {
     Sha1 = 0x11,
     Sha2_256 = 0x12,
