@@ -27,6 +27,8 @@ static DEFAULT_LENGTHS: phf::Map<u8, u8> = phf_map! {
     0x41u8 => 32,
 };
 
+pub type MultiHash<'a> = &'a [u8];
+
 struct DecodedMultihash<'a> {
     code: u8,
     name: &'static str,
