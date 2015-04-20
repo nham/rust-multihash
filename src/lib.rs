@@ -4,4 +4,4 @@
 
 extern crate phf;
 
-pub mod multihash;
+mod multihash;
