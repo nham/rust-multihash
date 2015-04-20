@@ -3,9 +3,5 @@ name = "rust-multihash"
 version = "0.0.1"
 authors = ["Nick Hamann <nick@wabbo.org>"]
 license = "MIT/Apache-2.0"
-homepage = "https://github.com/nham/rust-base58"
-repository = "https://github.com/nham/rust-base58"
-
-[dependencies]
-phf = "*"
-phf_macros = "*"
+homepage = "https://github.com/nham/rust-multihash"
+repository = "https://github.com/nham/rust-multihash"

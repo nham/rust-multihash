@@ -1,31 +1,63 @@
-use phf;
+use self::HashFnType::*;
 
-static NAMES: phf::Map<&'static str, u8> = phf_map! {
-    "sha1"     => 0x11,
-    "sha2-256" => 0x12,
-    "sha2-512" => 0x13,
-    "sha3"     => 0x14,
-    "blake2b"  => 0x40,
-    "blake2s"  => 0x41,
-};
+enum HashFnType {
+    Sha1 = 0x11,
+    Sha2_256 = 0x12,
+    Sha2_512 = 0x13,
+    Sha3 = 0x14,
+    Blake2b = 0x40,
+    Blake2s = 0x41,
+}
 
-static CODES: phf::Map<u8, &'static str> = phf_map! {
-    0x11u8 => "sha1",
-    0x12u8 => "sha2-256",
-    0x13u8 => "sha2-512",
-    0x14u8 => "sha3",
-    0x40u8 => "blake2b",
-    0x41u8 => "blake2s",
-};
+struct HashFnTypeData {
+    name: &'static str,
+    default_len: u8,
+}
 
-static DEFAULT_LENGTHS: phf::Map<u8, u8> = phf_map! {
-    0x11u8 => 20,
-    0x12u8 => 32,
-    0x13u8 => 64,
-    0x14u8 => 64,
-    0x40u8 => 64,
-    0x41u8 => 32,
-};
+impl HashFnType {
+    fn from(x: u8) -> Option<HashFnType> {
+        match x {
+            0x11 => Some(Sha1),
+            0x12 => Some(Sha2_256),
+            0x13 => Some(Sha2_512),
+            0x14 => Some(Sha3),
+            0x40 => Some(Blake2b),
+            0x41 => Some(Blake2s),
+            _ => None,
+        }
+    }
+}
+
+fn hashfn_data(hft: Option<HashFnType>) -> Option<HashFnTypeData> {
+    match hft {
+        None => None,
+        Some(c) => match c {
+            Sha1 => Some(HashFnTypeData{
+                            name: "sha1",
+                            default_len: 20}),
+
+            Sha2_256 => Some(HashFnTypeData{
+                            name: "sha2-256",
+                            default_len: 32}),
+
+            Sha2_512 => Some(HashFnTypeData{
+                            name: "sha2-512",
+                            default_len: 64}),
+
+            Sha3 => Some(HashFnTypeData{
+                            name: "sha3",
+                            default_len: 64}),
+
+            Blake2b => Some(HashFnTypeData{
+                            name: "blake2b",
+                            default_len: 64}),
+
+            Blake2s => Some(HashFnTypeData{
+                            name: "blake2s",
+                            default_len: 32}),
+        },
+    }
+}
 
 
 struct DecodedMultihash<'a> {
@@ -60,14 +92,14 @@ fn decode<'a>(mh: &'a [u8]) -> Result<DecodedMultihash<'a>, DecodeError> {
         }
     }
 
-    let hash_fn_name = match CODES.get(&mh[0]) {
+    let hash_fn = match hashfn_data(HashFnType::from(mh[0])) {
         None => return Err(DecodeError::UnknownCode(mh[0])),
         Some(c) => c,
     };
 
     let decoded = DecodedMultihash {
         code: mh[0],
-        name: hash_fn_name,
+        name: hash_fn.name,
         length: mh[1],
         digest: &mh[2..],
     };
@@ -75,7 +107,7 @@ fn decode<'a>(mh: &'a [u8]) -> Result<DecodedMultihash<'a>, DecodeError> {
 }
 
 fn encode<'a>(digest: &'a [u8], code: u8) -> Result<Vec<u8>, EncodeError> {
-    if CODES.get(&code).is_none() {
+    if hashfn_data(HashFnType::from(code)).is_none() {
         return Err(EncodeError::UnknownCode(code));
     }
 
