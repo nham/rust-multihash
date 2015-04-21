@@ -1,4 +1,4 @@
 #![feature(collections)]
 
-pub use multihash::MultiHash;
+pub use multihash::VecMultiHash;
 mod multihash;
