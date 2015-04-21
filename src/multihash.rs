@@ -20,7 +20,12 @@ impl VecMultiHash {
         VecMultiHash { vec: v }
     }
 
-    pub fn encode(data: Vec<u8>, code: HashFnCode) -> Result<VecMultiHash, EncodeError> {
+    pub fn encode(data: Vec<u8>, code: u8) -> Result<VecMultiHash, EncodeError> {
+        let fn_code = match HashFnCode::from(code) {
+            None => return Err(EncodeError::UnknownCode(code)),
+            Some(hfc) => hfc,
+        };
+
         let size = data.len();
         if size > 127 {
             return Err(EncodeError::NotSupported(size));
