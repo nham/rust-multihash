@@ -1,6 +1,6 @@
 #![feature(collections)]
 
 extern crate rust_base58;
-extern crate crypto;
+extern crate openssl;
 
 pub mod multihash;

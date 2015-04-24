@@ -7,7 +7,7 @@ homepage = "https://github.com/nham/rust-multihash"
 repository = "https://github.com/nham/rust-multihash"
 
 [dependencies]
-rust-crypto = "*"
+openssl = "*"
 
 [dependencies.rust-base58]
 git = "https://github.com/nham/rust-base58.git"

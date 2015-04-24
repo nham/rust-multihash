@@ -1,10 +1,7 @@
 use rust_base58::ToBase58;
 use self::HashFnType::*;
 
-use crypto::sha1;
-use crypto::digest::Digest;
-
-use std::result::Result;
+use openssl::crypto::hash as openssl_hash;
 
 
 // https://github.com/jbenet/multihash
@@ -33,23 +30,16 @@ impl HashFnType {
 
 // Takes bytes and a HashFnType, returns hash of the bytes
 pub fn multihash<'a>(data: &'a[u8], hash_type: HashFnType) -> VecMultiHash {
-    let length = hashfn_data(&hash_type).default_len;
-
-    let mut hash: Vec<u8> = match hash_type {
-        SHA1 => {
-            let mut hasher = sha1::Sha1::new();
-            let num_bytes = hasher.output_bits() / 8;
-            hasher.input(data);
-            let mut v = vec![0; num_bytes];
-            hasher.result(&mut v[..]);
-            v
-        },
-        SHA2_256 => panic!("That hash function is unimplemented. Sorry"),
-        _ => panic!("That hash function is unimplemented. Sorry"),
+    let mut openssl_type: openssl_hash::Type = match hash_type {
+        SHA1 => openssl_hash::Type::SHA1,
+        SHA2_256 => openssl_hash::Type::SHA256,
+        SHA2_512 => openssl_hash::Type::SHA512,
+        _ => panic!("That hash function is not yet implemented. Sorry"),
     };
 
-    hash.truncate(length as usize);
-    VecMultiHash::encode(&hash[..], hash_type as u8).unwrap()
+    let mut hashed = openssl_hash::hash(openssl_type, data);
+
+    VecMultiHash::encode(&hashed[..], hash_type as u8).unwrap()
 }
 
 
@@ -76,14 +66,6 @@ fn hashfn_data(hft: &HashFnType) -> HashFnTypeData {
     }
 }
 
-
-
-pub struct DecodedMultiHash<'a> {
-    code: HashFnType,
-    name: &'static str,
-    length: u8,
-    digest: &'a [u8],
-}
 
 pub struct VecMultiHash {
     vec: Vec<u8>,
@@ -158,6 +140,14 @@ impl VecMultiHash {
     }
 }
 
+
+pub struct DecodedMultiHash<'a> {
+    code: HashFnType,
+    name: &'static str,
+    length: u8,
+    digest: &'a [u8],
+}
+
 #[derive(Debug)]
 pub enum DecodeError {
     UnknownCode(u8),
@@ -171,7 +161,6 @@ pub enum EncodeError {
     UnknownCode(u8),
     NotSupported(usize),
 }
-
 
 
 #[cfg(test)]
