@@ -28,7 +28,7 @@ impl HashFnType {
     }
 }
 
-// Takes bytes and a HashFnType, returns hash of the bytes
+// Takes bytes and a HashFnType, returns multihash of the bytes
 pub fn multihash<'a>(data: &'a[u8], hash_type: HashFnType) -> VecMultiHash {
     let mut openssl_type: openssl_hash::Type = match hash_type {
         SHA1 => openssl_hash::Type::SHA1,
