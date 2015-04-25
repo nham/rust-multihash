@@ -79,7 +79,7 @@ impl VecMultiHash {
     // For constructing a VecMultiHash directly from a vector.
     // Function assumes that first byte is hash function code,
     // second is digest length. It's up to you.
-    pub fn from_vec(v: Vec<u8>) -> VecMultiHash {
+    pub fn from(v: Vec<u8>) -> VecMultiHash {
         VecMultiHash { vec: v }
     }
 
@@ -98,7 +98,7 @@ impl VecMultiHash {
         v.push(code);
         v.push(size as u8);
         v.push_all(data);
-        Ok(VecMultiHash::from_vec(v))
+        Ok(VecMultiHash::from(v))
     }
 
     pub fn decode<'a>(&'a self) -> Result<DecodedMultiHash<'a>, DecodeError> {
