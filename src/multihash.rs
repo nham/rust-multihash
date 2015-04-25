@@ -5,6 +5,7 @@ use openssl::crypto::hash as openssl_hash;
 
 
 // https://github.com/jbenet/multihash
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum HashFnType {
     SHA1 = 0x11,
     SHA2_256 = 0x12,
@@ -86,6 +87,8 @@ impl VecMultiHash {
     }
 
 
+    // Constructs a VecMultiHash out of the bytes of a hash and the
+    // HashFnCode corresponding to the type of hash function used
     pub fn encode<'a>(data: &'a [u8], code: u8) -> Result<VecMultiHash, EncodeError> {
         match HashFnType::from_u8(code) {
             None => return Err(EncodeError::UnknownCode(code)),
@@ -164,13 +167,91 @@ pub enum EncodeError {
 
 #[cfg(test)]
 mod tests {
-    use multihash;
+    use multihash::{self, VecMultiHash, HashFnType, DecodedMultiHash};
+    use rustc_serialize::hex::FromHex;
+
+    struct TestCase {
+        hexstr: &'static str,
+        hash_fn_type: HashFnType,
+    }
+
+    impl TestCase {
+        fn new(s: &'static str, ty: HashFnType) -> TestCase {
+            TestCase { hexstr: s, hash_fn_type: ty }
+        }
+    }
+
+    static SHA1_STR: &'static str = "a228821137dacdbcd3ba5fa264f918fd
+                                     a6223f7b";
+
+    static SHA256_STR: &'static str = "95071c8e1ad3c7a016b30fd25853c1d9\
+                                       e346ee7ee4afc977f554b139f71f4f30";
+
+    static SHA512_STR: &'static str = "3912d4c1777934091ed95a15278b351e\
+                                       00efa51f524af9af3320f0f6a227d551\
+                                       76b1399684d15a05f03d1e519a9a9aa5\
+                                       2a812a6d9bc63e5b485d6fd7ebf72114";
+
 
     #[test]
-    fn test_hash() {
-        multihash::multihash(b"ABC", multihash::HashFnType::SHA1);
-        multihash::multihash(b"ABC", multihash::HashFnType::SHA2_256);
-        multihash::multihash(b"ABC", multihash::HashFnType::SHA2_512);
+    fn test_multihash() {
+        multihash::multihash(b"ABC", HashFnType::SHA1);
+        multihash::multihash(b"ABC", HashFnType::SHA2_256);
+        multihash::multihash(b"ABC", HashFnType::SHA2_512);
+    }
+
+    fn hexstr_to_vec(hexstr: &'static str) -> Vec<u8> {
+        match hexstr.from_hex() {
+            Err(e) => panic!("from_hex() failed with error: {:?}", e),
+            Ok(vec) => vec,
+        }
+    }
+
+    #[test]
+    fn test_encode() {
+        let mut cases = Vec::new();
+
+        cases.push(TestCase::new(SHA1_STR, HashFnType::SHA1));
+        cases.push(TestCase::new(SHA256_STR, HashFnType::SHA2_256));
+        cases.push(TestCase::new(SHA512_STR, HashFnType::SHA2_512));
+
+        for case in cases {
+            let v = hexstr_to_vec(case.hexstr);
+
+            let mut manual = Vec::new();
+            manual.push(case.hash_fn_type as u8);
+            manual.push(v.len() as u8);
+            manual.push_all(&v[..]);
+
+            let mh = VecMultiHash::encode(&v[..], case.hash_fn_type as u8).unwrap();
+            assert_eq!(manual, mh.to_vec());
+        }
+    }
+
+    #[test]
+    fn test_decode() {
+        let mut cases = Vec::new();
+
+        cases.push(TestCase::new(SHA1_STR, HashFnType::SHA1));
+        cases.push(TestCase::new(SHA256_STR, HashFnType::SHA2_256));
+        cases.push(TestCase::new(SHA512_STR, HashFnType::SHA2_512));
+
+        for case in cases {
+            let v = hexstr_to_vec(case.hexstr);
+            let digest_length = v.len() as u8;
+            let mh = VecMultiHash::encode(&v[..], case.hash_fn_type as u8).unwrap();
+            let hash_name = multihash::hashfn_data(&case.hash_fn_type).name;
+
+            match mh.decode() {
+                Err(e) => panic!("Error decoding: {:?}", e),
+                Ok(decoded) => {
+                    assert_eq!(decoded.code, case.hash_fn_type);
+                    assert_eq!(decoded.name, hash_name);
+                    assert_eq!(decoded.length, digest_length);
+                    assert_eq!(decoded.digest, &v[..]);
+                },
+            }
+        }
     }
 
 }

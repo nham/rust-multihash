@@ -11,3 +11,6 @@ openssl = "*"
 
 [dependencies.rust-base58]
 git = "https://github.com/nham/rust-base58.git"
+
+[dev-dependencies]
+rustc-serialize = "*"
