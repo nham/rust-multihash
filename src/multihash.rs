@@ -131,7 +131,7 @@ impl VecMultiHash {
 
     }
 
-    pub fn vec(self) -> Vec<u8> {
+    pub fn to_vec(self) -> Vec<u8> {
         self.vec
     }
 
