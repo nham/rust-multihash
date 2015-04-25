@@ -169,7 +169,9 @@ mod tests {
 
     #[test]
     fn test_hash() {
-        multihash::hash(b"ABC", multihash::HashFnType::SHA1);
+        multihash::multihash(b"ABC", multihash::HashFnType::SHA1);
+        multihash::multihash(b"ABC", multihash::HashFnType::SHA2_256);
+        multihash::multihash(b"ABC", multihash::HashFnType::SHA2_512);
     }
 
 }
