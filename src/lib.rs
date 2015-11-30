@@ -5,11 +5,9 @@ extern crate openssl;
 use self::HashType::*;
 
 use openssl::crypto::hash as openssl_hash;
-use rust_base58::ToBase58;
-use std::hash::Hash;
+use rust_base58::{FromBase58, ToBase58};
 
-// https://github.com/jbenet/multihash
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone)]
 pub enum HashType {
     SHA1 = 0x11,
     SHA2_256 = 0x12,
@@ -20,8 +18,8 @@ pub enum HashType {
 }
 
 impl HashType {
-    pub fn from_u8(x: u8) -> Option<HashType> {
-        match x {
+    pub fn from_code(code: u8) -> Option<HashType> {
+        match code {
             0x11 => Some(SHA1),
             0x12 => Some(SHA2_256),
             0x13 => Some(SHA2_512),
@@ -32,15 +30,37 @@ impl HashType {
         }
     }
 
-    pub fn to_u8(&self) -> u8 {
+    fn digest_len(&self) -> u8 {
+        match *self {
+            SHA1     => 20,
+            SHA2_256 => 32,
+            SHA2_512 => 64,
+            SHA3     => 64,
+            BLAKE2B  => 64,
+            BLAKE2S  => 32,
+        }
+    }
+
+    fn code(&self) -> u8 {
         *self as u8
+    }
+
+    fn to_str(&self) -> &'static str {
+        match *self {
+            SHA1     => "sha1",
+            SHA2_256 => "sha2-256",
+            SHA2_512 => "sha2-512",
+            SHA3     => "sha3",
+            BLAKE2B  => "blake2b",
+            BLAKE2S  => "blake2s",
+        }
     }
 }
 
 // Takes bytes and a HashType, returns multihash of the bytes
 pub fn multihash<'a>(data: &'a[u8], hash_type: HashType) -> Multihash {
     let openssl_type: openssl_hash::Type = match hash_type {
-        SHA1 => openssl_hash::Type::SHA1,
+        SHA1     => openssl_hash::Type::SHA1,
         SHA2_256 => openssl_hash::Type::SHA256,
         SHA2_512 => openssl_hash::Type::SHA512,
         _ => panic!("That hash function is not yet implemented. Sorry"),
@@ -48,97 +68,119 @@ pub fn multihash<'a>(data: &'a[u8], hash_type: HashType) -> Multihash {
 
     let hashed = openssl_hash::hash(openssl_type, data);
 
-    Multihash::encode(&hashed[..], hash_type).unwrap()
+    Multihash::encode(&hashed[..], hash_type.code()).unwrap()
 }
 
 
-struct HashFnTypeData {
-    name: &'static str,
-    default_len: u8,
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Multihash {
+    bytes: Vec<u8>
 }
-
-
-fn hashfn_data(hft: &HashType) -> HashFnTypeData {
-    match *hft {
-        SHA1 =>
-            HashFnTypeData { name: "sha1", default_len: 20 },
-        SHA2_256 =>
-            HashFnTypeData { name: "sha2-256", default_len: 32 },
-        SHA2_512 =>
-            HashFnTypeData { name: "sha2-512", default_len: 64 },
-        SHA3 =>
-            HashFnTypeData { name: "sha3", default_len: 64 },
-        BLAKE2B =>
-            HashFnTypeData { name: "blake2b", default_len: 64 },
-        BLAKE2S =>
-            HashFnTypeData { name: "blake2s", default_len: 32 },
-    }
-}
-
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Multihash(Vec<u8>);
 
 impl Multihash {
-    pub fn new() -> Multihash {
-        Multihash(Vec::new())
+    /// Construct a multihash from a base58 string by parsing it into bytes. Verifies
+    /// that the bytes are valid according to the Multihash format.
+    pub fn from_base58_str(s: &str) -> Result<Multihash, String> {
+        let bytes = try!(s.from_base58()
+                          .map_err(|e| format!("Error parsing base58 string: {}", e)));
+
+        let hash_code = bytes[0];
+
+        if !is_valid_code(hash_code) {
+            return Err(format!("Invalid hash function code: {}", hash_code));
+        }
+
+        if !is_app_code(hash_code) {
+            let hash_type = HashType::from_code(hash_code).unwrap();
+            let expected_digest_len = hash_type.digest_len();
+            if expected_digest_len != bytes[1] {
+                return Err(format!("For hash function {}, expected digest length {}, but \
+                                    found digest length {}", hash_type.to_str(),
+                                    expected_digest_len, bytes[1]));
+            }
+        }
+
+        if (bytes.len() - 2) as u8 != bytes[1] {
+            return Err(format!("Hash digest is {} bytes, which does not match the stated \
+                                digest length {}", bytes.len() - 2, bytes[1]));
+        }
+
+        Ok(Multihash::from_vec(bytes))
+    }
+
+    /// Create a Multihash directly from a vector of bytes. Does not verify
+    /// that the bytes are a valid Multihash.
+    pub fn from_vec(vec: Vec<u8>) -> Multihash {
+        Multihash { bytes: vec }
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        &self.0[..]
+        &self.bytes[..]
     }
 
-    // Constructs a Multihash out of the bytes of a hash and the
-    // HashFnCode corresponding to the type of hash function used
-    pub fn encode<'a>(digest: &'a [u8], hash_type: HashType) -> Result<Multihash, String> {
+    /// Construct a Multihash out of the hash digest and hash function code
+    pub fn encode<'a>(digest: &'a [u8], hash_code: u8) -> Result<Multihash, String> {
         let size = digest.len();
         if size > 127 {
             return Err("Digest length > 127 is currently not supported.".to_string())
         }
 
+        if !is_valid_code(hash_code) {
+            return Err(format!("Hash code {} is not recognized", hash_code));
+        }
+
         let mut v = Vec::with_capacity(size + 2);
-        v.push(hash_type.to_u8());
+        v.push(hash_code);
         v.push(size as u8);
         v.extend(digest);
-        Ok(Multihash(v))
+        Ok(Multihash::from_vec(v))
     }
 
+    // TODO: evaluate whether this function makes sense
+    /*
     pub fn decode<'a>(&'a self) -> Result<DecodedMultiHash<'a>, DecodeError> {
-        let mhlen = self.0.len();
+        let mhlen = self.bytes.len();
         if mhlen < 3 {
             return Err(DecodeError::TooShort);
         } else if mhlen > 129 {
             return Err(DecodeError::TooLong);
         } else {
             let digest_len = (mhlen - 2) as u8;
-            if digest_len != self.0[1] {
-                return Err(DecodeError::InvalidDigestLength(self.0[1], digest_len));
+            if digest_len != self.bytes[1] {
+                return Err(DecodeError::InvalidDigestLength(self.bytes[1], digest_len));
             }
         }
 
-        let fn_code = match HashType::from_u8(self.0[0]) {
-            None => return Err(DecodeError::UnknownCode(self.0[0])),
+        let fn_code = match HashType::from_code(self.bytes[0]) {
+            None => return Err(DecodeError::UnknownCode(self.bytes[0])),
             Some(code) => code,
         };
 
-        let hash_fn = hashfn_data(&fn_code);
-
         let decoded = DecodedMultiHash {
             code: fn_code,
-            name: hash_fn.name,
-            length: self.0[1],
-            digest: &self.0[2..],
+            name: fn_code.to_str(),
+            length: self.bytes[1],
+            digest: &self.bytes[2..],
         };
         Ok(decoded)
 
     }
+    */
 
     pub fn to_base58_string(&self) -> String {
-        self.0.to_base58()
+        self.bytes.to_base58()
     }
 }
 
+fn is_valid_code(code: u8) -> bool {
+    is_app_code(code) || HashType::from_code(code).is_some()
+}
 
+fn is_app_code(code: u8) -> bool {
+    code <= 0x0f
+}
+
+/*
 pub struct DecodedMultiHash<'a> {
     code: HashType,
     name: &'static str,
@@ -153,12 +195,14 @@ pub enum DecodeError {
     TooLong,
     InvalidDigestLength(u8, u8), // (stated, actual)
 }
+*/
 
 
 #[cfg(test)]
 mod tests {
-    use super::{multihash, Multihash, HashType, DecodedMultiHash, hashfn_data};
+    use super::{multihash, Multihash, HashType};
     use rustc_serialize::hex::FromHex;
+    use rust_base58::ToBase58;
 
     struct TestCase {
         hexstr: &'static str,
@@ -229,15 +273,16 @@ mod tests {
             let v = hexstr_to_vec(case.hexstr);
 
             let mut expected = Vec::new();
-            expected.push(case.hash_type.to_u8());
+            expected.push(case.hash_type.code());
             expected.push(v.len() as u8);
             expected.extend(&v[..]);
 
-            let mh = Multihash::encode(&v[..], case.hash_type).unwrap();
+            let mh = Multihash::encode(&v[..], case.hash_type.code()).unwrap();
             assert_eq!(&expected[..], mh.as_bytes());
         }
     }
 
+    /*
     #[test]
     fn test_decode() {
         let mut cases = Vec::new();
@@ -250,7 +295,7 @@ mod tests {
             let v = hexstr_to_vec(case.hexstr);
             let digest_length = v.len() as u8;
             let mh = Multihash::encode(&v[..], case.hash_type).unwrap();
-            let hash_name = hashfn_data(&case.hash_type).name;
+            let hash_name = case.hash_type.to_str();
 
             match mh.decode() {
                 Err(e) => panic!("Error decoding: {:?}", e),
@@ -263,5 +308,21 @@ mod tests {
             }
         }
     }
+    */
 
+    #[test]
+    fn test_from_base58_str() {
+        assert!(Multihash::from_base58_str("Invalid base58!!!").is_err());
+
+        // Errors because digest length of SHA1 is 20, not 5
+        let x = &[0x11, 5, 1, 2, 3, 4, 5];
+        assert!(Multihash::from_base58_str(&x.to_base58()).is_err());
+
+        let x = &[0x11, 20, 1, 2, 3, 4, 5];
+        assert!(Multihash::from_base58_str(&x.to_base58()).is_err());
+
+        let x = &[0x11, 20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                  0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        assert!(Multihash::from_base58_str(&x.to_base58()).is_ok());
+    }
 }
