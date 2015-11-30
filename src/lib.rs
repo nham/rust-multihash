@@ -57,7 +57,8 @@ impl HashType {
     }
 }
 
-// Takes bytes and a HashType, returns multihash of the bytes
+/// Hashes the `data` with the function described by `hash_type` and returns the result
+/// as a Multihash.
 pub fn multihash<'a>(data: &'a[u8], hash_type: HashType) -> Multihash {
     let openssl_type: openssl_hash::Type = match hash_type {
         SHA1     => openssl_hash::Type::SHA1,
@@ -108,15 +109,15 @@ impl Multihash {
         Ok(Multihash::from_vec(bytes))
     }
 
-    /// Create a Multihash directly from a vector of bytes. Does not verify
-    /// that the bytes are a valid Multihash.
+    /// Create a Multihash directly from a vector of bytes. Does not verify that the
+    /// bytes are a valid Multihash.
     pub fn from_vec(vec: Vec<u8>) -> Multihash {
         Multihash { bytes: vec }
     }
 
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.bytes[..]
-    }
+    pub fn as_bytes(&self) -> &[u8] { &self.bytes[..] }
+
+    pub fn into_bytes(self) -> Vec<u8> { self.bytes }
 
     /// Construct a Multihash out of the hash digest and hash function code
     pub fn encode<'a>(digest: &'a [u8], hash_code: u8) -> Result<Multihash, String> {
@@ -126,7 +127,7 @@ impl Multihash {
         }
 
         if !is_valid_code(hash_code) {
-            return Err(format!("Hash code {} is not recognized", hash_code));
+            return Err(format!("Invalid hash function code: {}", hash_code));
         }
 
         let mut v = Vec::with_capacity(size + 2);
@@ -314,15 +315,19 @@ mod tests {
     fn test_from_base58_str() {
         assert!(Multihash::from_base58_str("Invalid base58!!!").is_err());
 
-        // Errors because digest length of SHA1 is 20, not 5
+        // digest length of SHA1 is 20, not 5
         let x = &[0x11, 5, 1, 2, 3, 4, 5];
         assert!(Multihash::from_base58_str(&x.to_base58()).is_err());
 
+        // mismatch between stated digest length and actual digest length
         let x = &[0x11, 20, 1, 2, 3, 4, 5];
         assert!(Multihash::from_base58_str(&x.to_base58()).is_err());
 
         let x = &[0x11, 20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
                   0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         assert!(Multihash::from_base58_str(&x.to_base58()).is_ok());
+
+        let x = "QmR6XorNYAywK4q1dRiRN1gmvfLcx3ccBv68iGtAqon9tt";
+        assert!(Multihash::from_base58_str(x).is_ok());
     }
 }
