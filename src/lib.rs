@@ -1,5 +1,6 @@
-extern crate rust_base58;
 extern crate openssl;
+extern crate rust_base58;
+extern crate rustc_serialize;
 #[cfg(test)] extern crate rustc_serialize;
 
 use self::HashType::*;
@@ -170,6 +171,14 @@ impl Multihash {
 
     pub fn to_base58_string(&self) -> String {
         self.bytes.to_base58()
+    }
+}
+
+impl rustc_serialize::Encodable for Multihash {
+    fn encode<S>(&self, s: &mut S) -> Result<(), S::Error> where
+        S: rustc_serialize::Encoder
+    {
+        self.to_base58_string().encode(s)
     }
 }
 
