@@ -12,6 +12,3 @@ rustc-serialize = "0.3"
 
 [dependencies.rust-base58]
 git = "https://github.com/nham/rust-base58.git"
-
-[dev-dependencies]
-rustc-serialize = "0.3"

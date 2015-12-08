@@ -1,7 +1,6 @@
 extern crate openssl;
 extern crate rust_base58;
 extern crate rustc_serialize;
-#[cfg(test)] extern crate rustc_serialize;
 
 use self::HashType::*;
 
