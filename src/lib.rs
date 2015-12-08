@@ -182,6 +182,12 @@ impl rustc_serialize::Encodable for Multihash {
     }
 }
 
+impl rustc_serialize::hex::ToHex for Multihash {
+    fn to_hex(&self) -> String {
+        self.bytes.to_hex()
+    }
+}
+
 fn is_valid_code(code: u8) -> bool {
     is_app_code(code) || HashType::from_code(code).is_some()
 }
