@@ -181,6 +181,15 @@ impl rustc_serialize::Encodable for Multihash {
     }
 }
 
+impl rustc_serialize::Decodable for Multihash {
+    fn decode<D>(d: &mut D) -> Result<Multihash, D::Error> where
+        D: rustc_serialize::Decoder
+    {
+        let s = try!(d.read_str());
+        Multihash::from_base58_str(&s).map_err(|e| d.error(&e))
+    }
+}
+
 impl rustc_serialize::hex::ToHex for Multihash {
     fn to_hex(&self) -> String {
         self.bytes.to_hex()
