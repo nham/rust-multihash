@@ -6,6 +6,7 @@ use self::HashType::*;
 
 use openssl::crypto::hash as openssl_hash;
 use rust_base58::{FromBase58, ToBase58};
+use std::fmt;
 
 #[derive(Copy, Clone)]
 pub enum HashType {
@@ -193,6 +194,12 @@ impl rustc_serialize::Decodable for Multihash {
 impl rustc_serialize::hex::ToHex for Multihash {
     fn to_hex(&self) -> String {
         self.bytes.to_hex()
+    }
+}
+
+impl fmt::Display for Multihash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.write_str(&self.to_base58_string())
     }
 }
 
